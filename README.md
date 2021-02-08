@@ -10,3 +10,5 @@ https://www.census.gov/programs-surveys/popest/data/data-sets.html
 
 climate data:
 https://www.esrl.noaa.gov/psd/data/gridded/data.narr.html
+
+# Processed data file: climate_detrend.RData   
