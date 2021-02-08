@@ -1,0 +1,430 @@
+---
+title: "AL_CDD"
+author: "Debs"
+date: "April 14, 2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+load("C:/Users/dmaiasil/Documents/Purdue Projects/Month_Climate/U_Curves/climate_detrend.RData")
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(boot)
+
+set.seed(123)
+```
+
+```{r, echo = F}
+# functions
+
+# function used to determine the hdd and cdd limits (visually)
+
+
+energy_sig <- function(climate.detrend, df, state, hdd_limit, cdd_limit, variable_column, quantile, variable_limit){
+  
+  if(missing(variable_limit)) variable_limit = NULL
+  
+  df <- climate.detrend %>%
+    filter(State == state) %>%
+    filter(sales_adjusted > quantile(climate.detrend$sales_adjusted, quantile))
+  
+  
+  df <- df[,c(variable_column,12)]
+  
+  
+  colnames(df) <- c("climate_feature", "sales_adjusted")
+  
+  
+  if(!is.null(variable_limit)){
+    
+    df <- df %>%
+      filter(climate_feature < variable_limit)
+    
+  }
+
+
+
+  if (hdd_limit == 0 ){
+    
+    hdd_limit <- min(df$climate_feature)
+
+    df2 <- df %>%
+      filter(between(df$climate_feature, hdd_limit,cdd_limit))
+
+    df3 <- df %>%
+      filter(climate_feature >= cdd_limit)
+
+    lm2 <- lm(sales_adjusted~ climate_feature, data = df2)
+    lm3 <- lm(sales_adjusted~ climate_feature, data = df3)
+
+
+    df2 <- data.frame(climate_feature = df2$climate_feature, sales_adjusted = lm2$fitted.values)
+    df3 <- data.frame(climate_feature = df3$climate_feature, sales_adjusted = lm3$fitted.values)
+
+    x2 = as.numeric((lm3$coefficients[1] - lm2$coefficients[1]) / (lm2$coefficients[2] - lm3$coefficients[2]))
+
+  p <- ggplot(df$df, aes(x = df$climate_feature)) + geom_point(aes(y = df$sales_adjusted), size = 0.5, shape = 4)+ theme_bw()+
+      ggtitle(paste0(colnames(climate.detrend)[variable_column]," ", state)) + geom_vline(xintercept =  x2, linetype = "dashed") + 
+      geom_line(data = df2, aes(x = climate_feature, y = sales_adjusted), color = 'red') +
+      geom_line(data = df3, aes(x = climate_feature, y = sales_adjusted), color = 'darkgreen') +
+      geom_text(aes(x= x2, label= round(x2,2), y = 500), colour="blue") 
+  
+
+    results <- list()
+    results[[1]] <- p
+    results[[2]] <- 0
+    results[[3]] <- x2
+
+    return(results)
+    
+  } else if (cdd_limit == 0 ){
+    
+    cdd_limit <- max(df$climate_feature)
+    
+    df1 <- df %>%
+      filter(climate_feature <= hdd_limit)
+
+    df2 <- df %>%
+      filter(between(df$climate_feature, hdd_limit,cdd_limit))
+
+
+    lm1 <- lm(sales_adjusted~ climate_feature, data = df1)
+    lm2 <- lm(sales_adjusted~ climate_feature, data = df2)
+
+
+    df1 <- data.frame(climate_feature = df1$climate_feature, sales_adjusted = lm1$fitted.values)
+    df2 <- data.frame(climate_feature = df2$climate_feature, sales_adjusted = lm2$fitted.values)
+
+    x1 = as.numeric((lm2$coefficients[1] - lm1$coefficients[1]) / (lm1$coefficients[2] - lm2$coefficients[2]))
+
+    p <- ggplot(df$df, aes(x = df$climate_feature)) + geom_point(aes(y = df$sales_adjusted), size = 0.5, shape = 4)+ theme_bw()+
+      ggtitle(paste0(colnames(climate.detrend)[variable_column]," ", state)) + geom_vline(xintercept = x1, linetype = "dashed") + 
+      geom_line(data = df1, aes(x = climate_feature, y = sales_adjusted), color = 'blue') +
+      geom_line(data = df2, aes(x = climate_feature, y = sales_adjusted), color = 'red') +
+      geom_text(aes(x=x1, label=round(x1,2), y = 500), colour="blue") 
+  
+
+    results <- list()
+    results[[1]] <- p
+    results[[2]] <- 0
+    results[[3]] <- x1
+
+    return(results)
+    
+    
+    
+    
+  } else {
+  
+    df1 <- df %>%
+      filter(climate_feature <= hdd_limit)
+
+    df2 <- df %>%
+      filter(between(df$climate_feature, hdd_limit,cdd_limit))
+
+    df3 <- df %>%
+      filter(climate_feature >= cdd_limit)
+
+    lm1 <- lm(sales_adjusted~ climate_feature, data = df1)
+    lm2 <- lm(sales_adjusted~ climate_feature, data = df2)
+    lm3 <- lm(sales_adjusted~ climate_feature, data = df3)
+
+    df1 <- data.frame(climate_feature = df1$climate_feature, sales_adjusted = lm1$fitted.values)
+    df2 <- data.frame(climate_feature = df2$climate_feature, sales_adjusted = lm2$fitted.values)
+    df3 <- data.frame(climate_feature = df3$climate_feature, sales_adjusted = lm3$fitted.values)
+
+    x1 = as.numeric((lm2$coefficients[1] - lm1$coefficients[1]) / (lm1$coefficients[2] - lm2$coefficients[2]))
+    x2 = as.numeric((lm3$coefficients[1] - lm2$coefficients[1]) / (lm2$coefficients[2] - lm3$coefficients[2]))
+
+    p <- ggplot(df$df, aes(x = df$climate_feature)) + geom_point(aes(y = df$sales_adjusted), size = 0.5, shape = 4)+ theme_bw()+
+      ggtitle(paste0(colnames(climate.detrend)[variable_column]," ", state)) + geom_vline(xintercept = c(x1, x2), linetype = "dashed") + 
+      geom_line(data = df1, aes(x = climate_feature, y = sales_adjusted), color = 'blue') +
+      geom_line(data = df2, aes(x = climate_feature, y = sales_adjusted), color = 'red') +
+      geom_line(data = df3, aes(x = climate_feature, y = sales_adjusted), color = 'darkgreen') +
+      geom_text(aes(x=c(x1, x2), label=c(round(x1,2), round(x2,2)), y = 500), colour="blue") 
+  
+
+    results <- list()
+    results[[1]] <- p
+    results[[2]] <- x1
+    results[[3]] <- x2
+
+    return(results)
+  
+  }
+}
+
+# statistics for the bootstrap and CI calculation
+
+base_boot <- function(data, idx, hdd_limit, cdd_limit, variable_limit){
+  
+  df <- data[idx,] # bootstrap sampling
+  
+  
+  if (hdd_limit == 0 ){
+    
+    hdd_limit <- min(df$climate_feature)
+
+    df2 <- df %>%
+      filter(between(df$climate_feature, hdd_limit,cdd_limit))
+
+    df3 <- df %>%
+      filter(climate_feature >= cdd_limit)
+
+    lm2 <- lm(sales_adjusted~ climate_feature, data = df2)
+    lm3 <- lm(sales_adjusted~ climate_feature, data = df3)
+
+    x2 = as.numeric((lm3$coefficients[1] - lm2$coefficients[1]) / (lm2$coefficients[2] - lm3$coefficients[2]))
+
+    return(x2)
+    
+  } else if (cdd_limit == 0 ){
+    
+    cdd_limit <- max(df$climate_feature)
+    
+    df1 <- df %>%
+      filter(climate_feature <= hdd_limit)
+
+    df2 <- df %>%
+      filter(between(df$climate_feature, hdd_limit,cdd_limit))
+
+
+    lm1 <- lm(sales_adjusted~ climate_feature, data = df1)
+    lm2 <- lm(sales_adjusted~ climate_feature, data = df2)
+
+    x1 = as.numeric((lm2$coefficients[1] - lm1$coefficients[1]) / (lm1$coefficients[2] - lm2$coefficients[2]))
+
+    return(x1)
+    
+    
+    
+  } else {
+  
+    df1 <- df %>%
+      filter(climate_feature <= hdd_limit)
+
+    df2 <- df %>%
+      filter(between(df$climate_feature, hdd_limit,cdd_limit))
+
+    df3 <- df %>%
+      filter(climate_feature >= cdd_limit)
+  
+    lm1 <- lm(sales_adjusted~ climate_feature, data = df1)
+    lm2 <- lm(sales_adjusted~ climate_feature, data = df2)
+    lm3 <- lm(sales_adjusted~ climate_feature, data = df3)
+  
+    x1 = as.numeric((lm2$coefficients[1] - lm1$coefficients[1]) / (lm1$coefficients[2] - lm2$coefficients[2]))
+    x2 = as.numeric((lm3$coefficients[1] - lm2$coefficients[1]) / (lm2$coefficients[2] - lm3$coefficients[2]))
+  
+    return(c(x1,x2))
+  
+  }
+  
+  
+}
+
+
+base_values <- function(climate.detrend, df, state, hdd_limit, cdd_limit, variable_column, quantile, variable_limit){
+  
+    if(missing(variable_limit)) variable_limit = NULL
+  
+    df <- climate.detrend %>%
+    filter(State == state) %>%
+    filter(sales_adjusted > quantile(climate.detrend$sales_adjusted, quantile))
+
+    df <- df[,c(variable_column,12)]
+  
+    colnames(df) <- c("climate_feature", "sales_adjusted")
+    
+    if(!is.null(variable_limit)){
+    
+      df <- df %>%
+        filter(climate_feature < variable_limit)
+    
+    }
+    
+    results <- boot(data = df, statistic = base_boot, R = 10000, hdd_limit = hdd_limit, cdd_limit = cdd_limit)
+
+    if(hdd_limit == 0){
+      
+        cdd.ci <- boot.ci(results, type = 'bca', index = 1)
+    
+      return(c(0, 0, 0, cdd.ci$bca[4], cdd.ci$t0, cdd.ci$bca[5]))
+      
+    } else if (cdd_limit == 0){
+      
+        hdd.ci <- boot.ci(results, type = 'bca', index = 1)
+    
+      return(c(hdd.ci$bca[4], hdd.ci$t0, hdd.ci$bca[5], 0, 0, 0))
+      
+    } else {
+    
+    hdd.ci <- boot.ci(results, type = 'bca', index = 1)
+    cdd.ci <- boot.ci(results, type = 'bca', index = 2)
+    
+    return(c(hdd.ci$bca[4], hdd.ci$t0, hdd.ci$bca[5], cdd.ci$bca[4], cdd.ci$t0, cdd.ci$bca[5]))
+  
+    }
+}
+```
+
+
+
+```{r, echo= F}
+# air temperature, observed data
+#i = i+1
+
+energy_sig(climate.detrend, df, "AR", 11, 18, 4, 0.2)[[1]]
+
+```
+
+```{r}
+res <- base_values(climate.detrend, df, "AR", 11, 18, 4, 0.2)
+
+base_results[i,1] <- "AR"
+base_results[i,2] <- "Air Temperature"
+base_results[i,3] <- res[1]
+base_results[i,4] <- res[2]
+base_results[i,5] <- res[3]
+base_results[i,6] <- res[4]
+base_results[i,7] <- res[5]
+base_results[i,8] <- res[6]
+```
+
+```{r, echo= F}
+# discomfort index, observed data
+energy_sig(climate.detrend, df, "AR", 10, 16, 5, 0.3)[[1]]
+
+```
+
+```{r}
+
+i = i +1
+res <- base_values(climate.detrend, df, "AR", 10, 16, 5, 0.3)
+
+base_results[i,1] <- "AR"
+base_results[i,2] <- "Discomfort Index"
+base_results[i,3] <- res[1]
+base_results[i,4] <- res[2]
+base_results[i,5] <- res[3]
+base_results[i,6] <- res[4]
+base_results[i,7] <- res[5]
+base_results[i,8] <- res[6]
+
+```
+
+```{r, echo= F}
+# heat index, observed data
+energy_sig(climate.detrend, df, "AR", 11, 19, 6, 0.3)[[1]]
+```
+
+
+```{r}
+
+i = i +1
+res <- base_values(climate.detrend, df, "AR", 11, 19, 6, 0.3)
+
+base_results[i,1] <- "AR"
+base_results[i,2] <- "Heat Index"
+base_results[i,3] <- res[1]
+base_results[i,4] <- res[2]
+base_results[i,5] <- res[3]
+base_results[i,6] <- res[4]
+base_results[i,7] <- res[5]
+base_results[i,8] <- res[6]
+
+```
+
+```{r, echo= F}
+
+# "Dew Point", observed data
+energy_sig(climate.detrend, df, "AR", 279, 284, 7, 0.2, variable_limit = 290)[[1]]
+
+```
+
+```{r}
+
+i = i +1
+
+res <- base_values(climate.detrend, df, "AR", 279, 284, 7, 0.2, variable_limit = 290)
+
+base_results[i,1] <- "AR"
+base_results[i,2] <- "Dew Point"
+base_results[i,3] <- res[1]
+base_results[i,4] <- res[2]
+base_results[i,5] <- res[3]
+base_results[i,6] <- res[4]
+base_results[i,7] <- res[5]
+base_results[i,8] <- res[6]
+
+```
+
+```{r, echo= F}
+
+# humidex, observed data
+energy_sig(climate.detrend, df, "AR", 9, 20, 8, 0.3)[[1]]
+
+```
+
+```{r}
+i = i +1
+
+res <- base_values(climate.detrend, df, "AR",  9, 20, 8, 0.3)
+
+base_results[i,1] <- "AR"
+base_results[i,2] <- "Humidex"
+base_results[i,3] <- res[1]
+base_results[i,4] <- res[2]
+base_results[i,5] <- res[3]
+base_results[i,6] <- res[4]
+base_results[i,7] <- res[5]
+base_results[i,8] <- res[6]
+
+```
+
+```{r, echo= F}
+# wet bulb, observed data
+energy_sig(climate.detrend, df, "AR", 9, 14, 9, 0.3)[[1]]
+```
+
+```{r}
+
+i = i +1
+res <- base_values(climate.detrend, df, "AR", 9, 14, 9, 0.3)
+
+base_results[i,1] <- "AR"
+base_results[i,2] <- "Wet Bulb"
+base_results[i,3] <- res[1]
+base_results[i,4] <- res[2]
+base_results[i,5] <- res[3]
+base_results[i,6] <- res[4]
+base_results[i,7] <- res[5]
+base_results[i,8] <- res[6]
+
+```
+
+```{r, echo= F}
+# wet bulb global, observed data
+energy_sig(climate.detrend, df, "AR", 13, 20, 10, 0)[[1]]
+
+```
+
+```{r}
+
+#i = i +1
+
+res <- base_values(climate.detrend, df, "AR", 13, 20, 10, 0)
+
+base_results[i,1] <- "AR"
+base_results[i,2] <- "Wet Bulb Global"
+base_results[i,3] <- res[1]
+base_results[i,4] <- res[2]
+base_results[i,5] <- res[3]
+base_results[i,6] <- res[4]
+base_results[i,7] <- res[5]
+base_results[i,8] <- res[6]
+
+```
